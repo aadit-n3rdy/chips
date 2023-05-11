@@ -1,0 +1,32 @@
+[
+ {
+  "directory": "/home/n3rdy/dev/c/chips",
+  "arguments": [
+   "clang",
+   "-Wall",
+   "-Iinclude",
+   "-I/usr/include/SDL2",
+   "-D_REENTRANT",
+   "-c",
+   "-o",
+   "obj/main.o",
+   "src/main.c"
+  ],
+  "file": "src/main.c"
+ },
+ {
+  "directory": "/home/n3rdy/dev/c/chips",
+  "arguments": [
+   "clang",
+   "-Wall",
+   "-Iinclude",
+   "-I/usr/include/SDL2",
+   "-D_REENTRANT",
+   "-c",
+   "-o",
+   "obj/chip8.o",
+   "src/chip8.c"
+  ],
+  "file": "src/chip8.c"
+ }
+]
