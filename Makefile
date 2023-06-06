@@ -10,12 +10,15 @@ LINK := $(foreach DEP,$(DEPS),$(shell pkg-config $(DEP) --libs --shared)) -lm
 SRC:=$(wildcard src/*.c)
 OBJ:=$(patsubst src/%.c, obj/%.o, $(SRC))
 
+ROMS_SRC:=$(wildcard rom_src/*.raw)
+ROMS:=$(patsubst rom_src/%.raw, roms/%.ch8, $(ROMS_SRC))
+
 OUT:=bin/$(PROJ)
 
 .DEFAULT_GOAL :=  all
 .PHONY: clean all test $(PROJ)
 
-all: $(OUT) # test
+all: $(OUT) $(ROMS)
 
 $(PROJ): $(OUT)
 
@@ -29,5 +32,5 @@ obj/%.o: src/%.c
 $(OUT): $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LINK)
 
-trial.ch8: trial.raw
-	xxd -r -p trial.raw trial.ch8
+roms/%.ch8: rom_src/%.raw
+	xxd -r -p $@ $<

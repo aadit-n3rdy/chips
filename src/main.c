@@ -8,8 +8,8 @@
 
 #include "chip8.h"
 
-#define WIN_WIDTH	640
-#define WIN_HEIGHT	320
+#define WIN_WIDTH      	640
+#define WIN_HEIGHT    	320
 #define WIN_MULTIPLIER	10
 
 int main(int argc, char **argv) {
@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
 	char quit = 0;
 	char debug = 0;
 
-	float freq = 500;
+	float freq = 5;
 
 	struct chip8 chip;
 
@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
 
 	chip8_init(&chip);
 
-	chip8_load_rom(&chip, (argc >= 2) ? argv[1] : "trial.ch8");
+	chip8_load_rom(&chip, (argc >= 2) ? argv[1] : "roms/emu_logo.ch8");
 
 	printf("Loaded ROM\n");
 	char b;
