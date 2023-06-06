@@ -11,7 +11,7 @@ git clone https://github.com/aadit-n3rdy/chips.git
 cd chips
 git submodule update --init --recursive
 make all
-./bin/chip8
+./bin/chips
 ```
 
 You should see a "C8" logo being rendered on the screen, with a *lot*
