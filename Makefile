@@ -1,6 +1,5 @@
 PROJ:=chips
 
-CC:=clang
 DEPS:=sdl2
 DEFS:=
 CFLAGS:=-Wall -Iinclude $(foreach DEP,$(DEPS),$(shell pkg-config $(DEP) --cflags --shared)) $(foreach DEF,$(DEFS), -D$(DEF))

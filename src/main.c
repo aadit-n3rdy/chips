@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
 	char quit = 0;
 	char debug = 0;
 
-	float freq = 5;
+	float freq = 500;
 
 	struct chip8 chip;
 
