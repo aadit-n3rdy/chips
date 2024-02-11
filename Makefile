@@ -5,7 +5,6 @@ DEFS:=
 CFLAGS:=-Wall -Iinclude $(foreach DEP,$(DEPS),$(shell pkg-config $(DEP) --cflags --shared)) $(foreach DEF,$(DEFS), -D$(DEF))
 LINK := $(foreach DEP,$(DEPS),$(shell pkg-config $(DEP) --libs --shared)) -lm
 
-
 SRC:=$(wildcard src/*.c)
 OBJ:=$(patsubst src/%.c, obj/%.o, $(SRC))
 
@@ -32,4 +31,4 @@ $(OUT): $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LINK)
 
 roms/%.ch8: rom_src/%.raw
-	xxd -r -p $@ $<
+	xxd -r -p $< $@

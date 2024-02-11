@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
 	char quit = 0;
 	char debug = 0;
 
-	float freq = 500;
+	float freq = 50000;
 
 	struct chip8 chip;
 
@@ -41,6 +41,10 @@ int main(int argc, char **argv) {
 	chip8_init(&chip);
 
 	chip8_load_rom(&chip, (argc >= 2) ? argv[1] : "roms/emu_logo.ch8");
+
+	if (argc >= 3) {
+		freq = atoi(argv[2]);
+	}
 
 	printf("Loaded ROM\n");
 	char b;
@@ -64,15 +68,19 @@ int main(int argc, char **argv) {
 						break;
 					default:
 						for (int i = 0; i < 16; i++) {
-							if (event.key.keysym.scancode == CHIP8_KEY[i])
+							if (event.key.keysym.scancode == CHIP8_KEY[i]) {
 								chip.kbstate[i] = 1;
+								printf("Pressed %x in SDL\n", i);
+							}
 						}
 						break;
 				}
 			} else if (event.type == SDL_KEYUP) {
 				for (int i = 0; i < 16; i++) {
-					if (event.key.keysym.scancode == CHIP8_KEY[i])
+					if (event.key.keysym.scancode == CHIP8_KEY[i]) {
 						chip.kbstate[i] = 0;
+						printf("Released %x in SDL\n", i);
+					}
 				}
 				break;
 
@@ -100,13 +108,15 @@ int main(int argc, char **argv) {
 					quit = 1;
 			}
 		}
+		
+		SDL_UpdateWindowSurface(win);
+
 		end_timer = SDL_GetPerformanceCounter();
 
 		ms = (end_timer - start_timer) / (float)SDL_GetPerformanceFrequency();
 
-		SDL_Delay(1000.0f/freq - ms);
 
-		SDL_UpdateWindowSurface(win);
+		SDL_Delay(1000.0f/freq - ms);
 	}
 
 	SDL_DestroyWindow(win);

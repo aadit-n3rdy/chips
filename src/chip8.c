@@ -51,7 +51,14 @@ inline static uint16_t chip8_load_instr(struct chip8 *chip) {
 	return opcode;
 }
 
-static void chip8_pixbuf_to_surf(uint64_t *pixbuf, SDL_Surface *surf) {
+// Blit to pixel x, y, return 1 if overlap
+static uint8_t chip8_pixbuf_blit(struct chip8 *chip, uint8_t x, uint8_t y) {
+	uint8_t ret = chip->pixbuf[y][x/8] & (1<<(x%8));
+	chip->pixbuf[y][x/8] ^= (1<<(x%8));
+	return ret;
+}
+
+static void chip8_pixbuf_to_surf(uint8_t pixbuf[32][8], SDL_Surface *surf) {
 	SDL_Rect rect;
 	rect.w = 10;
 	rect.h = 10;
@@ -60,9 +67,9 @@ static void chip8_pixbuf_to_surf(uint64_t *pixbuf, SDL_Surface *surf) {
 	for (int i = 0; i < 32; i++) {
 		mask = 1;
 		for (int j = 0; j < 64; j++, mask = mask << 1) {
-			rect.x =  630 - j * 10;
+			rect.x =  j * 10;
 			rect.y = i * 10;
-			col = (pixbuf[i] & mask) ? 0xffffffff : 0;
+			col = (pixbuf[i][j/8] & (1<<(j%8))) ? 0xffffffff : 0;
 			SDL_FillRect(surf, &rect, col);
 		}
 	}
@@ -134,7 +141,9 @@ int chip8_load_rom (struct chip8 *chip, const char *fname) {
 CHIP8_FUNC(chip8_clear_scrn) {
 	SDL_FillRect(chip->surf, NULL, SDL_MapRGB(chip->surf->format, 0, 0, 0));
 	for (int i = 0; i < 32; i++) {
-		chip->pixbuf[i] = 0;
+		for (int j = 0; j < 8; j++) {
+			chip->pixbuf[i][j] = 0;
+		}
 	}
 	chip->pc+=2;
 	return 0;
@@ -219,7 +228,7 @@ CHIP8_FUNC(chip8_or) {
 	uint8_t x1 = (opcode & 0x0f00) >> 8;
 	uint8_t x2 = (opcode & 0x00f0) >> 4;
 	chip->reg[x1] |= chip->reg[x2];
-	chip->pc += 2;
+	chip->pc += 2 > 0;
 
 	return 0;
 
@@ -327,16 +336,22 @@ CHIP8_FUNC(chip8_rand) {
 CHIP8_FUNC(chip8_draw) {
 	uint8_t x = chip->reg[(opcode & 0x0f00) >> 8];
 	uint8_t y = chip->reg[(opcode & 0x00f0) >> 4];
-	uint8_t max = y + (opcode & 0xf);
+	uint8_t max = (opcode & 0xf);
 	uint64_t cur_row;
+	uint8_t arow;
+	uint8_t mask;
 	printf("Printing sprite at %0#hx to position %hhu, %hhu\n", chip->i, x, y);
 	chip->reg[15] = 0;
-	for (uint8_t row = y; row < max; row++) {
-		cur_row = chip->mem[chip->i + row - y];
+	for (uint8_t row = 0; row < max; row++) {
+		arow = (y+row) % 32;
+		cur_row = chip->mem[chip->i + row];
 		cur_row &= 0xff;
-		cur_row = cur_row << ((unsigned int)56 - x);
-		chip->reg[15] = (chip->reg[15] || (cur_row & chip->pixbuf[row])) ? 1 : 0;
-		chip->pixbuf[row] ^= cur_row;
+		mask = 0x80;
+		for (uint8_t col = 0; col < 8; col++, mask >>= 1) {
+			if (cur_row & mask) {
+				chip->reg[15] = chip8_pixbuf_blit(chip, x+col, arow) || chip->reg[15];
+			}
+		}
 	}
 	chip8_pixbuf_to_surf(chip->pixbuf, chip->surf);
 	chip->pc += 2;
@@ -345,7 +360,7 @@ CHIP8_FUNC(chip8_draw) {
 
 CHIP8_FUNC(chip8_add_index) {
 	printf("I:%#hx Vx:%#hhx \n", chip->i, chip->reg[(opcode & 0x0f00) >> 8]);
-	chip->i += (uint16_t)chip->reg[(opcode & 0x0f00) >> 8];
+	chip->i += (uint16_t)(chip->reg[(opcode & 0x0f00) >> 8]);
 	chip->pc += 2;
 	printf("I:%#hx Vx:%#hhx \n", chip->i, chip->reg[(opcode & 0x0f00) >> 8]);
 	return 0;
@@ -420,12 +435,14 @@ CHIP8_FUNC(chip8_wait_key) {
 
 CHIP8_FUNC(chip8_get_dt) {
 	chip->reg[(opcode & 0x0f00) >> 8] = chip->dt;
+	printf("Dt value is %hhx, moved to reg %hhx", chip->dt, (unsigned char)((opcode & 0x0f00) >> 8));
 	chip->pc += 2;
 	return 0;
 }
 
 CHIP8_FUNC(chip8_set_dt) {
 	chip->dt = chip->reg[(opcode & 0x0f00) >> 8];
+	chip->last_delay = SDL_GetTicks64();
 	chip->pc += 2;
 	return 0;
 }
@@ -437,8 +454,19 @@ CHIP8_FUNC(chip8_set_st) {
 }
 
 int chip8_tick(struct chip8 *chip) {
-	if (chip->state == CHIP8_STATE_DELAY) {
-	} else if (chip->state == CHIP8_STATE_KEYDELAY) {
+	printf("State: ");
+	switch(chip->state) {
+		case CHIP8_STATE_KEYDELAY:
+			printf("keydelay\n");
+			break;
+		case CHIP8_STATE_NORMAL:
+			printf("normal\n");
+			break;
+		case CHIP8_STATE_DELAY:
+			printf("delay\n");
+			break;
+	}
+	if (chip->state == CHIP8_STATE_KEYDELAY) {
 		printf("Waiting for a key\n");
 		for (int i = 0; i <= 0xF; i++) {
 			if (chip->kbstate[i]) {
@@ -449,151 +477,173 @@ int chip8_tick(struct chip8 *chip) {
 			}
 		}
 	} else {
-
-	uint16_t opcode;
-
-	printf("PC: %#hx\n", chip->pc);
-
-	opcode = chip8_load_instr(chip);
-
-	printf("INSTR: %#hx\n", opcode);
-
-	switch((opcode & 0xF000) >> 12) {
-		case 0:
-			switch (opcode) {
-				case 0x00E0:
-					chip8_clear_scrn(chip, opcode);
-					break;
-				case 0x00EE:
-					chip8_ret(chip, opcode);
-					break;
-				default:
-					printf("ERROR: Invalid opcode %#hx at addr %#hx\n", opcode, chip->pc);
-					chip->pc += 2;
+		printf("i mean, it gets here\n");
+		printf("Delay timer: 0x%hhx\n", chip->dt);
+		if (chip->dt) {
+			printf("Delay exists\n");
+			uint64_t cur_ticks = SDL_GetTicks64();
+			if (cur_ticks - chip->last_delay >= 17) {
+				printf("Finally\n");
+				chip->dt--;
+				chip->last_delay = cur_ticks;
+				if (chip->dt == 0) {
+					printf("Timer done\n");
+				}
 			}
-			break;
-		case 1:
-			chip8_jmp(chip, opcode);
-			break;
-		case 2:
-			chip8_call(chip, opcode);
-			break;
-		case 3:
-			chip8_skip_eq(chip, opcode);
-			break;
-		case 4:
-			chip8_skip_neq(chip, opcode);
-			break;
-		case 5:
-			chip8_skip_eq_reg(chip, opcode);
-			break;
-		case 6:
-			chip8_load(chip, opcode);
-			break;
-		case 7:
-			chip8_add(chip, opcode);
-			break;
-		case 8:
-			switch (opcode & 0xf) {
-				case 0:
-					chip8_load_reg(chip, opcode);
-					break;
-				case 1:
-					chip8_or(chip, opcode);
-					break;
-				case 2:
-					chip8_and(chip, opcode);
-					break;
-				case 3:
-					chip8_xor(chip, opcode);
-					break;
-				case 4:
-					chip8_add_reg(chip, opcode);
-					break;
-				case 5:
-					chip8_sub_reg(chip, opcode);
-					break;
-				case 6:
-					chip8_shr(chip, opcode);
-					break;
-				case 7:
-					chip8_subn_reg(chip, opcode);
-					break;
-				case 0xe:
-					chip8_shl(chip, opcode);
-					break;
-				default:
-					printf("ERROR: Invalid opcode %#hx at addr %#hx\n", opcode, chip->pc);
-					chip->pc += 2;
-			}
-			break;
-		case 9:
-			chip8_skip_neq_reg(chip, opcode);
-			break;
-		case 0xA:
-			chip8_load_index(chip, opcode);
-			break;
-		case 0xB:
-			chip8_jmp_add(chip, opcode);
-			break;
-		case 0xC:
-			chip8_rand(chip, opcode);
-			break;
-		case 0xD:
-			chip8_draw(chip, opcode);
-			break;
-		case 0xE:
-			switch(opcode & 0xff) {
-				case 0x9E:
-					chip8_skip_pressed(chip, opcode);
-					break;
-				case 0xA1:
-					chip8_skip_npressed(chip, opcode);
-					break;
-				default:
-					printf("Instruction %#hx unimplemented, incrementing \n", opcode);
-					chip->pc += 2;
-			}
-			break;
-		case 0xF:
-			switch(opcode & 0xff) {
-				case 0x07:
-					chip8_get_dt(chip, opcode);
-					break;
-				case 0x0A:
-					chip8_wait_key(chip, opcode);
-					break;
-				case 0x15:
-					chip8_set_dt(chip, opcode);
-					break;
-				case 0x18:
-					printf("Instruction %#hx unimplemented, incrementing \n", opcode);
-					chip->pc += 2;
-					break;
-				case 0x1E:
-					chip8_add_index(chip, opcode);
-					break;
-				case 0x29:
-					chip8_load_sprite_addr(chip, opcode);
-					break;
-				case 0x33:
-					chip8_bcd(chip, opcode);
-					break;
-				case 0x55:
-					chip8_bulk_store(chip, opcode);
-					break;
-				case 0x65:
-					chip8_bulk_load(chip, opcode);
-					break;
-				default:
-					printf("Invalid opcode %#hx\n", opcode);
-					chip->pc += 2;
-			}
-			break;
-		default:
-			printf("Invalid or unimplemented opcode %#hx\n", opcode);
-			chip->pc += 2;
+			printf("Last delay: %lu Now: %lu\n", chip->last_delay, cur_ticks);
+		}
+
+		uint16_t opcode;
+
+		printf("PC: %#hx\n", chip->pc);
+
+		opcode = chip8_load_instr(chip);
+
+		printf("INSTR: %#hx\n", opcode);
+
+		switch((opcode & 0xF000) >> 12) {
+			case 0:
+				switch (opcode) {
+					case 0x00E0:
+						chip8_clear_scrn(chip, opcode);
+						break;
+					case 0x00EE:
+						chip8_ret(chip, opcode);
+						break;
+					default:
+						printf("ERROR: Invalid opcode %#hx at addr %#hx\n", opcode, chip->pc);
+						chip->pc += 2;
+				}
+				break;
+			case 1:
+				chip8_jmp(chip, opcode);
+				break;
+			case 2:
+				chip8_call(chip, opcode);
+				break;
+			case 3:
+				chip8_skip_eq(chip, opcode);
+				break;
+			case 4:
+				chip8_skip_neq(chip, opcode);
+				break;
+			case 5:
+				chip8_skip_eq_reg(chip, opcode);
+				break;
+			case 6:
+				chip8_load(chip, opcode);
+				break;
+			case 7:
+				chip8_add(chip, opcode);
+				break;
+			case 8:
+				switch (opcode & 0xf) {
+					case 0:
+						chip8_load_reg(chip, opcode);
+						break;
+					case 1:
+						chip8_or(chip, opcode);
+						break;
+					case 2:
+						chip8_and(chip, opcode);
+						break;
+					case 3:
+						chip8_xor(chip, opcode);
+						break;
+					case 4:
+						chip8_add_reg(chip, opcode);
+						break;
+					case 5:
+						chip8_sub_reg(chip, opcode);
+						break;
+					case 6:
+						chip8_shr(chip, opcode);
+						break;
+					case 7:
+						chip8_subn_reg(chip, opcode);
+						break;
+					case 0xe:
+						chip8_shl(chip, opcode);
+						break;
+					default:
+						printf("ERROR: Invalid opcode %#hx at addr %#hx\n", opcode, chip->pc);
+						chip->pc += 2;
+				}
+				break;
+			case 9:
+				chip8_skip_neq_reg(chip, opcode);
+				break;
+			case 0xA:
+				chip8_load_index(chip, opcode);
+				break;
+			case 0xB:
+				chip8_jmp_add(chip, opcode);
+				break;
+			case 0xC:
+				chip8_rand(chip, opcode);
+				break;
+			case 0xD:
+				chip8_draw(chip, opcode);
+				break;
+			case 0xE:
+				switch(opcode & 0xff) {
+					case 0x9E:
+						chip8_skip_pressed(chip, opcode);
+						break;
+					case 0xA1:
+						chip8_skip_npressed(chip, opcode);
+						break;
+					default:
+						printf("Instruction %#hx unimplemented, incrementing \n", opcode);
+						chip->pc += 2;
+				}
+				break;
+			case 0xF:
+				switch(opcode & 0xff) {
+					case 0x07:
+						chip8_get_dt(chip, opcode);
+						break;
+					case 0x0A:
+						chip8_wait_key(chip, opcode);
+						break;
+					case 0x15:
+						chip8_set_dt(chip, opcode);
+						break;
+					case 0x18:
+						printf("Instruction %#hx unimplemented, incrementing \n", opcode);
+						chip->pc += 2;
+						break;
+					case 0x1E:
+						chip8_add_index(chip, opcode);
+						break;
+					case 0x29:
+						chip8_load_sprite_addr(chip, opcode);
+						break;
+					case 0x33:
+						chip8_bcd(chip, opcode);
+						break;
+					case 0x55:
+						chip8_bulk_store(chip, opcode);
+						break;
+					case 0x65:
+						chip8_bulk_load(chip, opcode);
+						break;
+					default:
+						printf("Invalid opcode %#hx\n", opcode);
+						chip->pc += 2;
+				}
+				break;
+			default:
+				printf("Invalid or unimplemented opcode %#hx\n", opcode);
+				chip->pc += 2;
+		}
 	}
+	printf("Dumping display\n");
+	for (int i = 0; i < 32; i++) {
+		for (int j = 0; j < 64; j++) {
+			printf("%hhx", (chip->pixbuf[i][j/8] & (1<<(j&7))) > 0);
+		}
+		printf("\n");
 	}
 	return 0;
 }

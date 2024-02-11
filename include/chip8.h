@@ -15,24 +15,24 @@
 extern int CHIP8_KEY[16];
 
 struct chip8 {
-	char mem[4096];
-	char reg[16];
-	short int i;
-	char dt;
-	char st;
+	uint8_t mem[4096];
+	uint8_t reg[16];
+	uint16_t i;
+	uint8_t dt;
+	uint8_t st;
 
-	char state;
-	char delay_reg;
+	uint8_t state;
+	uint8_t delay_reg;
 	uint64_t last_delay;
 
 	uint8_t kbstate[16];
 
-	short int pc;
+	uint16_t pc;
 
-	short int stack[12];
-	int stack_lvl;
+	uint16_t stack[12];
+	int32_t stack_lvl;
 
-	uint64_t pixbuf[32]; // 0th byte: pix0, and so on
+	uint8_t pixbuf[32][8]; // 0th byte: pix0, and so on
 
 	char debug;
 
