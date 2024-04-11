@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
 	char quit = 0;
 	char debug = 0;
 
-	float freq = 50000;
+	float freq = 100000;
 
 	struct chip8 chip;
 
@@ -33,7 +33,6 @@ int main(int argc, char **argv) {
 		printf("ERROR: Could not init SDL2\n");
 		exit(-1);
 	}
-
 	surf = SDL_GetWindowSurface(win);
 
 	chip.surf = surf;

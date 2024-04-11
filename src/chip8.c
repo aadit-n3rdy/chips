@@ -462,9 +462,6 @@ int chip8_tick(struct chip8 *chip) {
 		case CHIP8_STATE_NORMAL:
 			printf("normal\n");
 			break;
-		case CHIP8_STATE_DELAY:
-			printf("delay\n");
-			break;
 	}
 	if (chip->state == CHIP8_STATE_KEYDELAY) {
 		printf("Waiting for a key\n");

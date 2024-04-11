@@ -9,7 +9,6 @@
 #define CHIP8_FUNC(FUNC) int FUNC (struct chip8 *chip, short int opcode)
 
 #define CHIP8_STATE_NORMAL	0
-#define CHIP8_STATE_DELAY	1
 #define CHIP8_STATE_KEYDELAY	2
 
 extern int CHIP8_KEY[16];
